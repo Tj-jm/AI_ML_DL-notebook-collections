@@ -1,0 +1,1329 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Research Buddy v1.2 — Summary Adherence Scoring via AlignScore</title>
+    <script>
+        window.MathJax = {
+            tex: { inlineMath: [["\\(", "\\)"]], displayMath: [["\\[", "\\]"]] }
+        };
+    </script>
+    <script async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js"></script>
+    <style>
+        :root {
+            --primary: #1a1a2e;
+            --secondary: #16213e;
+            --accent: #0f3460;
+            --highlight: #e94560;
+            --text: #eaeaea;
+            --muted: #a0a0b0;
+            --card: #1e2a45;
+            --border: #2a3a5c;
+            --code-bg: #0d1b2a;
+            --success: #4caf7d;
+            --warning: #f0a500;
+            --info: #4a9eda;
+
+            --fs-base: clamp(15px, 1vw + 12px, 17px);
+            --fs-sm: 0.88em;
+            --fs-xs: 0.78em;
+            --radius: 10px;
+            --pad-page: clamp(16px, 4vw, 48px);
+        }
+
+        *,
+        *::before,
+        *::after {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        html {
+            color-scheme: dark;
+            scroll-behavior: smooth;
+        }
+
+        body {
+            font-family: Georgia, 'Times New Roman', serif;
+            background: var(--primary);
+            color: var(--text);
+            font-size: var(--fs-base);
+            line-height: 1.8;
+        }
+
+        /* ── HEADER ── */
+        header {
+            background: linear-gradient(135deg, var(--accent), var(--highlight));
+            padding: clamp(36px, 6vw, 70px) var(--pad-page);
+            text-align: center;
+        }
+
+        .tag {
+            display: inline-block;
+            background: rgba(255, 255, 255, .15);
+            border: 1px solid rgba(255, 255, 255, .3);
+            border-radius: 20px;
+            padding: 3px 14px;
+            font-size: var(--fs-xs);
+            letter-spacing: 1.4px;
+            text-transform: uppercase;
+            margin-bottom: 18px;
+            font-family: monospace;
+        }
+
+        header h1 {
+            font-size: clamp(1.6em, 4vw, 2.5em);
+            line-height: 1.25;
+            margin-bottom: 12px;
+        }
+
+        header p {
+            font-size: clamp(.95em, 1.5vw, 1.1em);
+            color: rgba(255, 255, 255, .85);
+            max-width: 680px;
+            margin: 0 auto;
+        }
+
+        .meta {
+            margin-top: 20px;
+            font-size: var(--fs-xs);
+            color: rgba(255, 255, 255, .65);
+            font-family: monospace;
+        }
+
+        /* ── NAV ── */
+        nav {
+            background: var(--secondary);
+            border-bottom: 1px solid var(--border);
+            position: sticky;
+            top: 0;
+            z-index: 200;
+        }
+
+        nav ul {
+            list-style: none;
+            display: flex;
+            overflow-x: auto;
+            padding: 0 var(--pad-page);
+            scrollbar-width: none;
+        }
+
+        nav ul::-webkit-scrollbar {
+            display: none;
+        }
+
+        nav ul li a {
+            display: block;
+            padding: 14px 16px;
+            color: var(--muted);
+            text-decoration: none;
+            font-size: var(--fs-xs);
+            font-family: monospace;
+            border-bottom: 2px solid transparent;
+            transition: color .2s, border-color .2s;
+            white-space: nowrap;
+        }
+
+        nav ul li a:hover {
+            color: var(--text);
+            border-bottom-color: var(--highlight);
+        }
+
+        /* ── MAIN ── */
+        main {
+            max-width: 960px;
+            margin: 0 auto;
+            padding: clamp(28px, 5vw, 60px) var(--pad-page);
+        }
+
+        section {
+            margin-bottom: clamp(48px, 7vw, 80px);
+        }
+
+        /* ── TYPOGRAPHY ── */
+        .section-label {
+            font-family: monospace;
+            font-size: var(--fs-xs);
+            color: var(--highlight);
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            margin-bottom: 6px;
+        }
+
+        h2 {
+            font-size: clamp(1.4em, 2.5vw, 1.9em);
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        h3 {
+            font-size: clamp(1.05em, 1.8vw, 1.25em);
+            color: #c8d8f0;
+            margin: 28px 0 12px;
+        }
+
+        p {
+            margin-bottom: 14px;
+            color: #d0d8e8;
+        }
+
+        ul,
+        ol {
+            padding-left: 22px;
+            margin-bottom: 14px;
+            color: #d0d8e8;
+        }
+
+        li {
+            margin-bottom: 7px;
+        }
+
+        /* ── CODE ── */
+        pre {
+            background: var(--code-bg);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: clamp(14px, 3vw, 22px);
+            overflow-x: auto;
+            font-family: 'Courier New', Courier, monospace;
+            font-size: clamp(.8em, 1vw + .5em, .88em);
+            line-height: 1.65;
+            margin: 16px 0;
+            color: #a8c8f0;
+            white-space: pre;
+        }
+
+        code {
+            font-family: 'Courier New', Courier, monospace;
+            background: var(--code-bg);
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: .87em;
+            color: #a8c8f0;
+            word-break: break-word;
+        }
+
+        /* ── CARDS ── */
+        .card {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: clamp(16px, 3vw, 28px);
+            margin: 20px 0;
+        }
+
+        .card-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+            gap: 14px;
+            margin: 20px 0;
+        }
+
+        .metric-card {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 18px 16px;
+            text-align: center;
+        }
+
+        .metric-card .value {
+            font-size: clamp(1.6em, 3vw, 2em);
+            font-weight: bold;
+            color: var(--highlight);
+            font-family: monospace;
+        }
+
+        .metric-card .label {
+            font-size: var(--fs-xs);
+            color: var(--muted);
+            margin-top: 5px;
+        }
+
+        /* ── TABLES ── */
+        .table-wrapper {
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+            margin: 20px 0;
+            border-radius: var(--radius);
+            border: 1px solid var(--border);
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: var(--fs-sm);
+            min-width: 500px;
+        }
+
+        thead {
+            background: var(--accent);
+        }
+
+        th {
+            padding: 12px 14px;
+            text-align: left;
+            color: #c8d8f0;
+            font-family: monospace;
+            font-size: var(--fs-xs);
+        }
+
+        td {
+            padding: 11px 14px;
+            border-top: 1px solid var(--border);
+            color: #d0d8e8;
+        }
+
+        tr:hover td {
+            background: rgba(255, 255, 255, .03);
+        }
+
+        .score-high {
+            color: var(--success);
+            font-weight: bold;
+        }
+
+        .score-med {
+            color: var(--warning);
+            font-weight: bold;
+        }
+
+        .score-low {
+            color: var(--highlight);
+            font-weight: bold;
+        }
+
+        /* ── BOXES ── */
+        .highlight-box {
+            background: rgba(233, 69, 96, .08);
+            border-left: 3px solid var(--highlight);
+            border-radius: 6px;
+            padding: 14px 18px;
+            margin: 18px 0;
+        }
+
+        .info-box {
+            background: rgba(74, 158, 218, .08);
+            border-left: 3px solid var(--info);
+            border-radius: 6px;
+            padding: 14px 18px;
+            margin: 18px 0;
+        }
+
+        /* ── BADGES ── */
+        .badge {
+            display: inline-block;
+            padding: 2px 9px;
+            border-radius: 12px;
+            font-size: var(--fs-xs);
+            font-family: monospace;
+            font-weight: bold;
+            margin-left: 6px;
+            white-space: nowrap;
+        }
+
+        .badge-green {
+            background: rgba(76, 175, 125, .2);
+            color: var(--success);
+            border: 1px solid var(--success);
+        }
+
+        .badge-red {
+            background: rgba(233, 69, 96, .2);
+            color: var(--highlight);
+            border: 1px solid var(--highlight);
+        }
+
+        .badge-yellow {
+            background: rgba(240, 165, 0, .2);
+            color: var(--warning);
+            border: 1px solid var(--warning);
+        }
+
+        /* ── EQUATION ── */
+        .equation {
+            background: var(--code-bg);
+            border-left: 3px solid var(--highlight);
+            border-radius: 6px;
+            padding: 18px 20px;
+            margin: 18px 0;
+            text-align: center;
+            font-size: clamp(.95em, 1.2vw, 1.05em);
+            overflow-x: auto;
+        }
+
+        .equation p {
+            font-size: var(--fs-sm);
+            color: var(--muted);
+            margin-top: 10px;
+            margin-bottom: 0;
+        }
+
+        /* ── ENDPOINT ── */
+        .endpoint {
+            background: var(--code-bg);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            margin: 20px 0;
+            overflow: hidden;
+        }
+
+        .endpoint-header {
+            background: var(--accent);
+            padding: 10px 18px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .method {
+            background: var(--highlight);
+            color: #fff;
+            padding: 3px 10px;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: var(--fs-xs);
+            font-weight: bold;
+        }
+
+        .endpoint-path {
+            font-family: monospace;
+            color: #c8d8f0;
+            font-size: .93em;
+        }
+
+        .endpoint-body {
+            padding: clamp(14px, 3vw, 20px);
+        }
+
+        .endpoint-body p {
+            font-size: var(--fs-sm);
+            color: var(--muted);
+            margin-bottom: 10px;
+        }
+
+        /* ── SENTENCE CARDS ── */
+        .sentence-card {
+            background: var(--code-bg);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: clamp(14px, 3vw, 20px);
+            margin: 14px 0;
+        }
+
+        .sent-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 10px;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        .sent-num {
+            background: var(--accent);
+            color: #c8d8f0;
+            border-radius: 50%;
+            width: 28px;
+            height: 28px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: monospace;
+            font-size: var(--fs-xs);
+            flex-shrink: 0;
+        }
+
+        .sent-text {
+            flex: 1;
+            font-style: italic;
+            color: var(--muted);
+            font-size: var(--fs-sm);
+            padding: 0 10px;
+            min-width: 0;
+        }
+
+        .score-bar {
+            height: 5px;
+            background: var(--border);
+            border-radius: 3px;
+            margin: 8px 0;
+            overflow: hidden;
+        }
+
+        .score-bar-fill {
+            height: 100%;
+            border-radius: 3px;
+        }
+
+        /* ── WORKFLOW ── */
+        .workflow {
+            display: flex;
+            flex-direction: column;
+            margin: 20px 0;
+        }
+
+        .workflow-step {
+            display: flex;
+            gap: 16px;
+            align-items: flex-start;
+        }
+
+        .step-connector {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            flex-shrink: 0;
+        }
+
+        .step-num {
+            background: var(--highlight);
+            color: #fff;
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: monospace;
+            font-weight: bold;
+            font-size: var(--fs-xs);
+        }
+
+        .step-line {
+            width: 2px;
+            flex: 1;
+            min-height: 20px;
+            background: var(--border);
+            margin: 4px 0;
+        }
+
+        .step-content {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 12px 16px;
+            margin-bottom: 6px;
+            flex: 1;
+            font-size: var(--fs-sm);
+        }
+
+        .step-content strong {
+            color: #c8d8f0;
+        }
+
+        /* ── PSEUDOCODE ── */
+        .pseudo-section {
+            margin: 18px 0;
+        }
+
+        .pseudo-header {
+            background: var(--accent);
+            border-radius: 8px 8px 0 0;
+            padding: 9px 16px;
+            font-family: monospace;
+            font-size: var(--fs-sm);
+            color: #c8d8f0;
+            letter-spacing: .4px;
+        }
+
+        .pseudo-body {
+            background: var(--code-bg);
+            border: 1px solid var(--border);
+            border-top: none;
+            border-radius: 0 0 8px 8px;
+            padding: clamp(12px, 2.5vw, 18px) clamp(14px, 3vw, 20px);
+            font-family: 'Courier New', Courier, monospace;
+            font-size: clamp(.82em, .8vw + .6em, .88em);
+            line-height: 1.75;
+            color: #a8c8f0;
+            overflow-x: auto;
+        }
+
+        .pseudo-example {
+            background: rgba(76, 175, 125, .07);
+            border-left: 3px solid var(--success);
+            border-radius: 4px;
+            padding: 10px 14px;
+            margin: 10px 0;
+            font-family: 'Courier New', Courier, monospace;
+            font-size: clamp(.82em, .8vw + .6em, .88em);
+            color: #c8f0d8;
+            line-height: 1.65;
+            overflow-x: auto;
+        }
+
+        .pseudo-example-label {
+            font-size: var(--fs-xs);
+            color: var(--success);
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            margin-bottom: 6px;
+            font-family: monospace;
+        }
+
+        .matrix-table {
+            font-family: monospace;
+            font-size: var(--fs-sm);
+            border-collapse: collapse;
+            margin: 10px 0;
+        }
+
+        .matrix-table td,
+        .matrix-table th {
+            padding: 6px 14px;
+            border: 1px solid var(--border);
+            text-align: center;
+        }
+
+        .matrix-table thead {
+            background: var(--accent);
+        }
+
+        .matrix-table .best {
+            color: var(--success);
+            font-weight: bold;
+        }
+
+        /* ── VIDEO ── */
+        .video-placeholder {
+            background: var(--code-bg);
+            border: 2px dashed var(--border);
+            border-radius: var(--radius);
+            padding: clamp(12px, 3vw, 20px);
+            text-align: center;
+            margin: 20px 0;
+        }
+
+        .video-placeholder video {
+            width: 100%;
+            border-radius: 8px;
+            display: block;
+            max-height: 520px;
+            object-fit: contain;
+        }
+
+        .placeholder-text {
+            color: var(--muted);
+            font-family: monospace;
+            font-size: var(--fs-sm);
+            margin-top: 10px;
+        }
+
+        /* ── ARCH CARD ── */
+        .arch-card {
+            background: var(--code-bg);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: clamp(16px, 3vw, 24px);
+            font-family: 'Courier New', Courier, monospace;
+            font-size: clamp(.82em, .8vw + .6em, .9em);
+            line-height: 2.1;
+            color: #a8c8f0;
+            overflow-x: auto;
+            margin: 16px 0;
+        }
+
+        /* ── FOOTER ── */
+        footer {
+            background: var(--secondary);
+            border-top: 1px solid var(--border);
+            padding: clamp(24px, 4vw, 40px) var(--pad-page);
+            text-align: center;
+            color: var(--muted);
+            font-size: var(--fs-sm);
+        }
+
+        footer strong {
+            color: var(--text);
+        }
+
+        footer a {
+            color: var(--highlight);
+            text-decoration: none;
+        }
+
+        footer a:hover {
+            text-decoration: underline;
+        }
+
+        /* ── Pseudocode link card ── */
+        .pseudo-link-card {
+            display: flex;
+            align-items: center;
+            gap: 1.5rem;
+            margin-top: 2rem;
+            padding: 1.75rem 2rem;
+            border-radius: 14px;
+            border: 1px solid rgba(56, 189, 248, 0.25);
+            background: linear-gradient(135deg, rgba(56, 189, 248, 0.06) 0%, rgba(15, 23, 42, 0.9) 100%);
+            text-decoration: none;
+            color: inherit;
+            transition: border-color 0.25s, background 0.25s, transform 0.2s, box-shadow 0.25s;
+            cursor: pointer;
+        }
+
+        .pseudo-link-card:hover {
+            border-color: rgba(56, 189, 248, 0.65);
+            background: linear-gradient(135deg, rgba(56, 189, 248, 0.12) 0%, rgba(15, 23, 42, 0.95) 100%);
+            transform: translateY(-3px);
+            box-shadow: 0 12px 32px rgba(56, 189, 248, 0.15);
+        }
+
+        .pseudo-link-card__icon {
+            flex-shrink: 0;
+            width: 52px;
+            height: 52px;
+            border-radius: 12px;
+            background: rgba(56, 189, 248, 0.1);
+            border: 1px solid rgba(56, 189, 248, 0.3);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #38bdf8;
+        }
+
+        .pseudo-link-card__icon svg {
+            width: 26px;
+            height: 26px;
+        }
+
+        .pseudo-link-card__body {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .pseudo-link-card__title {
+            font-size: 1.15rem;
+            font-weight: 700;
+            color: #38bdf8;
+            margin-bottom: 0.4rem;
+        }
+
+        .pseudo-link-card__desc {
+            font-size: 0.9rem;
+            color: #94a3b8;
+            line-height: 1.6;
+            margin-bottom: 0.85rem;
+        }
+
+        .pseudo-link-card__desc code {
+            background: rgba(56, 189, 248, 0.12);
+            color: #7dd3fc;
+            padding: 0.1rem 0.4rem;
+            border-radius: 4px;
+            font-size: 0.85em;
+            font-family: 'Courier New', monospace;
+        }
+
+        .pseudo-link-card__meta {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+        }
+
+        .pseudo-link-card__tag {
+            font-size: 0.72rem;
+            font-family: 'Courier New', monospace;
+            color: #38bdf8;
+            background: rgba(56, 189, 248, 0.08);
+            border: 1px solid rgba(56, 189, 248, 0.2);
+            padding: 0.2rem 0.6rem;
+            border-radius: 20px;
+            white-space: nowrap;
+        }
+
+        .pseudo-link-card__arrow {
+            flex-shrink: 0;
+            color: #38bdf8;
+            opacity: 0.6;
+            transition: opacity 0.2s, transform 0.2s;
+        }
+
+        .pseudo-link-card__arrow svg {
+            width: 22px;
+            height: 22px;
+        }
+
+        .pseudo-link-card:hover .pseudo-link-card__arrow {
+            opacity: 1;
+            transform: translateX(4px);
+        }
+
+        @media (max-width: 520px) {
+            .pseudo-link-card {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 1rem;
+                padding: 1.25rem;
+            }
+
+            .pseudo-link-card__arrow {
+                display: none;
+            }
+        }
+
+        .acknowledgement-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 7px;
+            padding: 7px 16px;
+            margin: 1.5rem 0 0.5rem;
+            border-radius: 999px;
+            font-size: 0.82rem;
+            background: rgba(233, 69, 96, 0.07);
+            border: 1px solid rgba(233, 69, 96, 0.25);
+            color: #e9869a;
+        }
+
+        .acknowledgement-badge svg {
+            color: #e9456e;
+            flex-shrink: 0;
+            fill: rgba(233, 69, 96, 0.3);
+        }
+
+        .acknowledgement-badge a {
+            color: #f4a3b3;
+            text-decoration: none;
+            font-weight: 600;
+            border-bottom: 1px dashed rgba(244, 163, 179, 0.4);
+            transition: color 0.15s, border-color 0.15s;
+        }
+
+        .acknowledgement-badge a:hover {
+            color: #fff;
+            border-bottom-color: #fff;
+        }
+    </style>
+</head>
+
+<body>
+
+    <header>
+        <div class="tag">Whitepaper &middot; Research Buddy v1.2</div>
+        <h1>Summary Adherence Scoring<br>via AlignScore</h1>
+        <p>A new feature integrating factual consistency evaluation into Research Buddy's dual-pipeline summarization
+            workflow</p>
+        <div class="meta">Nur A Jaman &nbsp;&middot;&nbsp; February 2026 &nbsp;&middot;&nbsp; turjo-jaman.com</div>
+    </header>
+
+    <nav>
+        <ul>
+            <li><a href="#introduction">1. Introduction</a></li>
+            <li><a href="#alignscore">2. AlignScore</a></li>
+            <li><a href="#integration">3. Integration</a></li>
+            <li><a href="#pseudocode">4. Pseudocode</a></li>
+            <li><a href="#case-study">5. Case Study</a></li>
+        </ul>
+    </nav>
+
+    <main>
+        <!-- ════════════════ 1. Acknowledgement ════════════════ -->
+        <div class="acknowledgement-badge">
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none"
+                stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="8" r="4" />
+                <path d="M4 20c0-4 3.6-7 8-7s8 3 8 7" />
+            </svg>
+            Acknowledgement &mdash;
+            <a href="https://shibbirtanvin.github.io/" target="_blank" rel="noopener">
+                Dr. Shibbir Ahmed
+            </a>
+            , Asst. Professor, Texas State University &mdash; for suggesting this research work
+        </div>
+
+
+        <!-- ════════════════ 1. INTRODUCTION ════════════════ -->
+        <section id="introduction">
+            <div class="section-label">Section 01</div>
+            <h2>Introduction</h2>
+            <p>Research Buddy was originally conceived as a personal productivity tool to streamline academic paper
+                discovery and understanding. Version 1.1 delivered abstract extraction, multi-model classification,
+                dual-pipeline keyword extraction and summarization (Transformer + Gemini), and a personal paper library
+                &mdash; all in one integrated, cost-conscious platform.</p>
+            <p>However, a critical gap remained: while v1.1 could <em>generate</em> summaries, it could not
+                <em>validate</em> them. Large language models and local Transformers are known to hallucinate &mdash;
+                producing fluent but factually inconsistent content.
+            </p>
+            <div class="highlight-box">
+                <strong>New in v1.2 &mdash; Summary Adherence Scoring:</strong> Automatically evaluates the factual
+                consistency of any generated summary against the full paper text, returning an interpretable score,
+                confidence level, and per-sentence evidence breakdown.
+            </div>
+            <p>This transforms Research Buddy from a generation tool into a <strong>reliability-focused research
+                    companion</strong>, aligned with principles of Explainable AI (XAI) and trustworthy NLP.</p>
+            <h3>XAI &amp; Trustworthiness Alignment</h3>
+            <p>By delivering granular per-sentence alignment breakdowns with evidence chunks, the feature provides
+                interpretable reasoning behind factual consistency scores, enabling users to audit LLM summaries
+                transparently. The binary <code>is_reliable</code> flag and calibrated thresholds foster warranted
+                trust, mitigating hallucination risks in Transformer/Gemini outputs while correlating strongly with
+                human judgments on established benchmarks.</p>
+        </section>
+
+        <!-- ════════════════ 2. ALIGNSCORE ════════════════ -->
+        <section id="alignscore">
+            <div class="section-label">Section 02</div>
+            <h2>AlignScore: Architecture, Training &amp; Scoring</h2>
+
+            <h3>2.1 Motivation</h3>
+            <p>Prior metrics &mdash; n-gram based (ROUGE, BLEU), NLI-based (SummaC), or QA-based (QAFactEval) &mdash;
+                rely on narrow, task-specific training data and fail to generalize. AlignScore (Zha et al., 2023)
+                proposes a unified alignment function trained on 4.7M examples from 7 well-established NLP tasks.</p>
+
+            <h3>2.2 Architecture</h3>
+            <p>AlignScore is built on <strong>RoBERTa</strong> with three output heads trained jointly:</p>
+            <div class="card-grid">
+                <div class="metric-card">
+                    <div class="value" style="font-size:1.05em;">3-Way</div>
+                    <div class="label">ALIGNED / CONTRADICT / NEUTRAL<br>(primary head)</div>
+                </div>
+                <div class="metric-card">
+                    <div class="value" style="font-size:1.05em;">Binary</div>
+                    <div class="label">ALIGNED / NOT-ALIGNED</div>
+                </div>
+                <div class="metric-card">
+                    <div class="value" style="font-size:1.05em;">Regression</div>
+                    <div class="label">Score in [0, 1]</div>
+                </div>
+            </div>
+
+            <h3>2.3 Internal Model Architecture</h3>
+            <p>The text pair <code>(chunk, sentence)</code> is fed into RoBERTa. The <code>pooler_output</code> &mdash;
+                the <strong>[CLS] token</strong> embedding (768-dim) &mdash; is passed through the three linear heads.
+                [CLS] = start token; [SEP] = separator.</p>
+            <div class="arch-card">
+                Input: &nbsp;[CLS] chunk_text [SEP] summary_sentence [SEP]<br>
+                &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&darr; RoBERTa Transformer Blocks (12–24 layers)<br>
+                &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&darr; pooler_output = CLS token embedding (768-dim)<br>
+                &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&darr;<br>
+                &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&#9500;&#9472; tri_layer &nbsp;Linear(768&rarr;3) &nbsp;&rarr;
+                ALIGNED / CONTRADICT / NEUTRAL &nbsp;&#11088;<br>
+                &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&#9500;&#9472; bin_layer &nbsp;Linear(768&rarr;2) &nbsp;&rarr;
+                ALIGNED / NOT-ALIGNED<br>
+                &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&#9492;&#9472; reg_layer &nbsp;Linear(768&rarr;1) &nbsp;&rarr;
+                score &isin; [0, 1]
+            </div>
+            </div>
+
+            <p style="margin-top: 0.75rem; font-size: 0.9rem;">
+                → <a href="bertalign_architecture.html" target="_blank">Full Architecture Breakdown</a>
+            </p>
+
+            <h3>2.4 MLM in Synthetic Data Augmentation</h3>
+
+
+            <h3>2.4 MLM in Synthetic Data Augmentation</h3>
+            <p>The <strong>MLM (Masked Language Model)</strong> component is used only during <em>training</em>, not
+                inference. Negative (NOT-ALIGNED) samples are synthetically generated by masking 25% of tokens in
+                aligned pairs and using MLM to infill them &mdash; producing plausible but factually inconsistent pairs.
+            </p>
+            <div class="info-box">
+                <strong>Key distinction:</strong> CLS pooling is the inference-time scoring mechanism. MLM is a
+                training-time augmentation tool only.
+            </div>
+
+            <h3>2.5 Joint Loss Function</h3>
+            <div class="equation">
+                \[ L_{total} = \lambda_1 L_{3\text{-way}} + \lambda_2 L_{\text{bin}} + \lambda_3 L_{\text{reg}} \quad
+                \text{where} \quad \lambda_1 = \lambda_2 = \lambda_3 = 1 \]
+            </div>
+
+            <h3>2.6 Training Dataset</h3>
+            <div class="table-wrapper">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>NLP Task</th>
+                            <th>Datasets</th>
+                            <th>Label Type</th>
+                            <th>Samples</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>NLI</td>
+                            <td>SNLI, MultiNLI, Adversarial NLI, DocNLI</td>
+                            <td>3-way / binary</td>
+                            <td>~2M</td>
+                        </tr>
+                        <tr>
+                            <td>Fact Verification</td>
+                            <td>FEVER, VitaminC</td>
+                            <td>3-way</td>
+                            <td>~579k</td>
+                        </tr>
+                        <tr>
+                            <td>Paraphrase</td>
+                            <td>QQP, PAWS, WikiText-103</td>
+                            <td>binary</td>
+                            <td>~9M</td>
+                        </tr>
+                        <tr>
+                            <td>STS</td>
+                            <td>SICK, STS Benchmark</td>
+                            <td>regression</td>
+                            <td>~10k</td>
+                        </tr>
+                        <tr>
+                            <td>Question Answering</td>
+                            <td>SQuAD v2, RACE</td>
+                            <td>binary</td>
+                            <td>~481k</td>
+                        </tr>
+                        <tr>
+                            <td>Info Retrieval</td>
+                            <td>MS MARCO</td>
+                            <td>binary</td>
+                            <td>~5M</td>
+                        </tr>
+                        <tr>
+                            <td>Summarization</td>
+                            <td>WikiHow</td>
+                            <td>binary</td>
+                            <td>~157k</td>
+                        </tr>
+                        <tr style="background:rgba(233,69,96,.08)">
+                            <td><strong>Total</strong></td>
+                            <td colspan="2"><strong>15 datasets, 7 tasks</strong></td>
+                            <td><strong>4.7M</strong></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <h3>2.7 Scoring Formula</h3>
+            <ol>
+                <li>Split paper into ~350-token chunks at sentence boundaries</li>
+                <li>Split summary into individual sentences</li>
+                <li>Score all chunk &times; sentence pairs</li>
+                <li>Take max score per summary sentence (best matching chunk)</li>
+                <li>Mean of all max scores = final AlignScore</li>
+            </ol>
+            <div class="equation">
+                \[ \text{ALIGNSCORE}(o,l) = \frac{1}{|l|} \sum_{j} \max_{i} \; \text{alignment}(o_i, l_j) \]
+                <p>\(o_i\) = context chunks &nbsp;&middot;&nbsp; \(l_j\) = claim sentences &nbsp;&middot;&nbsp;
+                    alignment = P(ALIGNED) from tri_layer</p>
+            </div>
+
+            <h3>2.8 Benchmark Performance</h3>
+            <div class="table-wrapper">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Benchmark</th>
+                            <th>AlignScore-large</th>
+                            <th>Previous SOTA</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>SummaC (AUC-ROC avg)</td>
+                            <td class="score-high">88.6%</td>
+                            <td>84.6% (UniEval)</td>
+                        </tr>
+                        <tr>
+                            <td>TRUE (AUC-ROC avg)</td>
+                            <td class="score-high">87.4%</td>
+                            <td>86.3% (AlignScore-base)</td>
+                        </tr>
+                        <tr>
+                            <td>Pearson Correlation</td>
+                            <td class="score-high">54.1%</td>
+                            <td>48.6% (QAFactEval)</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- ════════════════ 3. INTEGRATION ════════════════ -->
+        <section id="integration">
+            <div class="section-label">Section 03</div>
+            <h2>Integration in Research Buddy</h2>
+
+            <h3>3.1 Design Philosophy</h3>
+            <p>AlignScore runs locally via Hugging Face &mdash; no external API, consistent with the free-tier stack.
+                Exposed via two FastAPI endpoints under the <code>/adherence</code> router.</p>
+
+            <h3>3.2 API Routes</h3>
+            <div class="endpoint">
+                <div class="endpoint-header">
+                    <span class="method">POST</span>
+                    <span class="endpoint-path">/adherence/score</span>
+                    <span class="badge badge-green">Simple Score</span>
+                </div>
+                <div class="endpoint-body">
+                    <p>Returns overall score, confidence, and reliability flag.</p>
+                    <pre>// Input
+{ "paper_text": "...", "summary_text": "..." }
+
+// Output
+{ "align_score": 0.682, "confidence": "Medium", "is_reliable": false }</pre>
+                </div>
+            </div>
+
+            <div class="endpoint">
+                <div class="endpoint-header">
+                    <span class="method">POST</span>
+                    <span class="endpoint-path">/adherence/breakdown</span>
+                    <span class="badge badge-yellow">Detailed</span>
+                </div>
+                <div class="endpoint-body">
+                    <p>Returns per-sentence breakdown with top-k supporting chunks.</p>
+                    <pre>// Input
+{ "paper_text": "...", "summary_text": "...", "top_k": 3 }
+
+// Output
+{
+  "align_score": 0.682, "num_context_chunks": 39,
+  "num_claim_sentences": 4,
+  "per_sentence": [
+    { "sentence_index": 0, "best_chunk_score": 0.906,
+      "top_k_chunks": [{"chunk_index":1,"score":0.906}, ...] }
+  ]
+}</pre>
+                </div>
+            </div>
+
+            <h3>3.3 Validation</h3>
+            <ul>
+                <li>Empty <code>paper_text</code> or <code>summary_text</code> &rarr; HTTP 400</li>
+                <li><code>top_k</code> outside [1–10] &rarr; HTTP 400</li>
+                <li>Internal exception &rarr; HTTP 500</li>
+            </ul>
+
+            <h3>3.4 User Workflow</h3>
+            <div class="workflow">
+                <div class="workflow-step">
+                    <div class="step-connector">
+                        <div class="step-num">1</div>
+                        <div class="step-line"></div>
+                    </div>
+                    <div class="step-content"><strong>Upload PDF</strong> — abstract and full text extracted
+                        automatically</div>
+                </div>
+                <div class="workflow-step">
+                    <div class="step-connector">
+                        <div class="step-num">2</div>
+                        <div class="step-line"></div>
+                    </div>
+                    <div class="step-content"><strong>Dual Summaries Generated</strong> — Transformer + Gemini pipelines
+                        run in parallel</div>
+                </div>
+                <div class="workflow-step">
+                    <div class="step-connector">
+                        <div class="step-num">3</div>
+                        <div class="step-line"></div>
+                    </div>
+                    <div class="step-content"><strong>AlignScore Evaluation</strong> — each summary scored via
+                        <code>/adherence/score</code>
+                    </div>
+                </div>
+                <div class="workflow-step">
+                    <div class="step-connector">
+                        <div class="step-num">4</div>
+                        <div class="step-line"></div>
+                    </div>
+                    <div class="step-content"><strong>Breakdown on Demand</strong> — drill into
+                        <code>/adherence/breakdown</code> for per-sentence evidence
+                    </div>
+                </div>
+                <div class="workflow-step">
+                    <div class="step-connector">
+                        <div class="step-num">5</div>
+                    </div>
+                    <div class="step-content"><strong>Library Save</strong> — select the more reliable summary to attach
+                        to paper collection</div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ════════════════ 4. PSEUDOCODE ════════════════ -->
+        <section id="pseudocode">
+            <div class="section-label">Section 04</div>
+            <h2>Pseudocode Walkthrough</h2>
+            <p>Each step traced with DeepInfer-flavored examples showing exactly how data flows through the pipeline.
+            </p>
+
+            <a href="pseudocode_alignscore.html" target="_blank" class="pseudo-link-card">
+                <div class="pseudo-link-card__icon">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                        stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="16 18 22 12 16 6" />
+                        <polyline points="8 6 2 12 8 18" />
+                    </svg>
+                </div>
+                <div class="pseudo-link-card__body">
+                    <div class="pseudo-link-card__title">Full Pseudocode Walkthrough</div>
+                    <div class="pseudo-link-card__desc">
+                        All 5 functions — <code>chunk_text</code>, <code>get_confidence</code>,
+                        <code>inference_core</code>, <code>inference_per_example</code>,
+                        <code>get_align_score</code> — traced step-by-step with DeepInfer examples.
+                    </div>
+                    <div class="pseudo-link-card__meta">
+                        <span class="pseudo-link-card__tag">chunk_text</span>
+                        <span class="pseudo-link-card__tag">inference_core</span>
+                        <span class="pseudo-link-card__tag">RoBERTa · 768-dim</span>
+                        <span class="pseudo-link-card__tag">softmax → ALIGNED</span>
+                    </div>
+                </div>
+                <div class="pseudo-link-card__arrow">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                        stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="5" y1="12" x2="19" y2="12" />
+                        <polyline points="12 5 19 12 12 19" />
+                    </svg>
+                </div>
+            </a>
+        </section>
+
+
+        <!-- ════════════════ 5. CASE STUDY ════════════════ -->
+        <section id="case-study">
+            <div class="section-label">Section 05</div>
+            <h2>Case Study: DeepInfer Paper Evaluation</h2>
+
+            <h3>5.1 Paper Overview</h3>
+            <p><strong>"Inferring Data Preconditions from Deep Learning Models for Trustworthy Prediction in
+                    Deployment"</strong> (Ahmed, Gao &amp; Rajan, ICSE 2024) proposes DeepInfer &mdash; a technique to
+                infer data preconditions from trained DNNs using weakest precondition calculus.</p>
+            <div class="card-grid">
+                <div class="metric-card">
+                    <div class="value">29</div>
+                    <div class="label">DNN Models</div>
+                </div>
+                <div class="metric-card">
+                    <div class="value">4</div>
+                    <div class="label">Real-World Datasets</div>
+                </div>
+                <div class="metric-card">
+                    <div class="value">0.98</div>
+                    <div class="label">PCC Correct Preds</div>
+                </div>
+                <div class="metric-card">
+                    <div class="value">3.27x</div>
+                    <div class="label">Faster than SOTA</div>
+                </div>
+            </div>
+
+            <h3>5.2 Demo Video</h3>
+            <!-- Replace YOUR_VIDEO_FILE.mp4 with your actual filename, e.g. Align-Score-for-Research-Buddy.mp4 -->
+            <div class="video-placeholder">
+                <video controls>
+                    <source src="./assets/align score.mp4" type="video/mp4">
+                    Your browser does not support the video tag.
+                </video>
+                <p class="placeholder-text">Replace <code>src="YOUR_VIDEO_FILE.mp4"</code> with your video filename</p>
+            </div>
+
+            <h3>5.3 Test Setup</h3>
+            <ul>
+                <li><strong>Input:</strong> Full paper text &rarr; 39 context chunks</li>
+                <li><strong>Summary:</strong> 4-sentence Gemini-generated summary</li>
+                <li><strong>Parameters:</strong> <code>top_k=3</code></li>
+            </ul>
+
+            <h3>5.4 Aggregate Results</h3>
+            <div class="card-grid">
+                <div class="metric-card">
+                    <div class="value">68.2%</div>
+                    <div class="label">AlignScore</div>
+                </div>
+                <div class="metric-card">
+                    <div class="value" style="color:var(--warning)">Medium</div>
+                    <div class="label">Confidence</div>
+                </div>
+                <div class="metric-card">
+                    <div class="value" style="color:var(--highlight)">False</div>
+                    <div class="label">Is Reliable</div>
+                </div>
+                <div class="metric-card">
+                    <div class="value">39 / 4</div>
+                    <div class="label">Chunks / Sents</div>
+                </div>
+            </div>
+
+            <h3>5.5 Per-Sentence Breakdown</h3>
+
+            <div class="sentence-card">
+                <div class="sent-header">
+                    <div class="sent-num">0</div>
+                    <div class="sent-text">"DeepInfer proposes a novel technique to infer data preconditions from
+                        trained DNNs to assess trustworthiness of predictions on unseen data."</div>
+                    <span class="badge badge-green">90.6%</span>
+                </div>
+                <div class="score-bar">
+                    <div class="score-bar-fill" style="width:90.6%;background:var(--success)"></div>
+                </div>
+                <small style="color:var(--muted)">Best: Chunk 1 (Abstract) &middot; Top-3: Chunk 3 (74.4%), Chunk 5
+                    (70.7%)</small>
+            </div>
+
+            <div class="sentence-card">
+                <div class="sent-header">
+                    <div class="sent-num">1</div>
+                    <div class="sent-text">"The approach utilizes a new DNN abstraction and weakest precondition
+                        calculus, deriving rules to compute layer-wise preconditions backward from model output."</div>
+                    <span class="badge badge-yellow">74.0%</span>
+                </div>
+                <div class="score-bar">
+                    <div class="score-bar-fill" style="width:74%;background:var(--warning)"></div>
+                </div>
+                <small style="color:var(--muted)">Best: Chunk 3 (Motivation) &middot; Top-3: Chunk 1 (67.4%), Chunk 8
+                    (57.2%)</small>
+            </div>
+
+            <div class="sentence-card">
+                <div class="sent-header">
+                    <div class="sent-num">2</div>
+                    <div class="sent-text">"Data precondition violations are highly correlated (pcc=0.88) with incorrect
+                        predictions; satisfaction strongly correlates (pcc=0.98) with correct ones."</div>
+                    <span class="badge badge-red">53.2%</span>
+                </div>
+                <div class="score-bar">
+                    <div class="score-bar-fill" style="width:53.2%;background:var(--highlight)"></div>
+                </div>
+                <small style="color:var(--muted)">Best: Chunk 14 (Results) &middot; Top-3: Chunk 12 (24.5%), Chunk 15
+                    (23.3%)</small>
+            </div>
+
+            <div class="sentence-card">
+                <div class="sent-header">
+                    <div class="sent-num">3</div>
+                    <div class="sent-text">"DeepInfer effectively identifies correct/incorrect predictions (recall 0.98,
+                        F-1 0.84) and demonstrates a 3.27x speed improvement over state-of-the-art."</div>
+                    <span class="badge badge-red">55.3%</span>
+                </div>
+                <div class="score-bar">
+                    <div class="score-bar-fill" style="width:55.3%;background:var(--highlight)"></div>
+                </div>
+                <small style="color:var(--muted)">Best: Chunk 20 (Conclusion) &middot; Top-3: Chunk 0 (33.6%), Chunk 28
+                    (27.2%)</small>
+            </div>
+
+            <h3>5.6 Analysis</h3>
+            <p>Sentences describing core contributions (0–1) score strongly (74–90%), closely mirroring the abstract.
+                Sentences summarizing quantitative results (2–3) score lower (53–55%), suggesting the Gemini summary
+                paraphrased numerical claims at a level of abstraction that weakened chunk alignment.</p>
+            <p>The <code>is_reliable: false</code> flag correctly signals that while the summary captures the gist, it
+                may not be faithful enough for citation or critical analysis.</p>
+        </section>
+
+    </main>
+
+    <footer>
+        <p><strong>Research Buddy v1.2</strong> &mdash; Summary Adherence Scoring via AlignScore</p>
+        <p style="margin-top:6px">Nur A Jaman &nbsp;&middot;&nbsp; February 2026 &nbsp;&middot;&nbsp; <a
+                href="https://turjo-jaman.com">turjo-jaman.com</a></p>
+        <p style="margin-top:14px;font-size:.82em">AlignScore: Zha et al., ACL 2023 &nbsp;&middot;&nbsp; DeepInfer:
+            Ahmed et al., ICSE 2024</p>
+    </footer>
+
+</body>
+
+</html>

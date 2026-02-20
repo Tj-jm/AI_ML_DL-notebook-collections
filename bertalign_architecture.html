@@ -1,0 +1,498 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BERTAlignModel — Architecture Deep Dive</title>
+    <style>
+        :root {
+            --primary: #1a1a2e;
+            --secondary: #16213e;
+            --accent: #0f3460;
+            --highlight: #e94560;
+            --text: #eaeaea;
+            --muted: #a0a0b0;
+            --card: #1e2a45;
+            --border: #2a3a5c;
+            --code-bg: #0d1b2a;
+            --success: #4caf7d;
+            --warning: #f0a500;
+            --info: #4a9eda;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: Georgia, serif; background: var(--primary); color: var(--text); line-height: 1.8; font-size: 16px; }
+
+        header {
+            background: linear-gradient(135deg, var(--accent), #1a4a8a);
+            padding: 50px 40px;
+            text-align: center;
+            border-bottom: 2px solid var(--highlight);
+        }
+        header .tag { display: inline-block; background: rgba(255,255,255,0.12); border: 1px solid rgba(255,255,255,0.25); border-radius: 20px; padding: 4px 16px; font-size: 12px; letter-spacing: 1.5px; text-transform: uppercase; margin-bottom: 16px; font-family: monospace; }
+        header h1 { font-size: 2em; margin-bottom: 10px; }
+        header p { color: rgba(255,255,255,0.75); font-size: 1em; max-width: 600px; margin: 0 auto; }
+
+        nav { background: var(--secondary); border-bottom: 1px solid var(--border); padding: 0 40px; position: sticky; top: 0; z-index: 100; }
+        nav ul { list-style: none; display: flex; overflow-x: auto; }
+        nav ul li a { display: block; padding: 14px 18px; color: var(--muted); text-decoration: none; font-size: 0.88em; font-family: monospace; border-bottom: 2px solid transparent; transition: all 0.2s; white-space: nowrap; }
+        nav ul li a:hover { color: var(--text); border-bottom-color: var(--highlight); }
+
+        main { max-width: 980px; margin: 0 auto; padding: 50px 40px; }
+        section { margin-bottom: 60px; }
+        .section-label { font-family: monospace; font-size: 0.78em; color: var(--highlight); letter-spacing: 2px; text-transform: uppercase; margin-bottom: 8px; }
+        h2 { font-size: 1.75em; color: var(--text); margin-bottom: 20px; padding-bottom: 10px; border-bottom: 1px solid var(--border); }
+        h3 { font-size: 1.15em; color: #c8d8f0; margin: 28px 0 12px; }
+        p { margin-bottom: 14px; color: #d0d8e8; }
+
+        pre { background: var(--code-bg); border: 1px solid var(--border); border-radius: 8px; padding: 20px; overflow-x: auto; font-family: "Courier New", monospace; font-size: 0.83em; line-height: 1.65; margin: 16px 0; color: #a8c8f0; }
+        code { font-family: "Courier New", monospace; background: var(--code-bg); padding: 2px 6px; border-radius: 4px; font-size: 0.87em; color: #a8c8f0; }
+
+        .highlight-box { background: rgba(233,69,96,0.08); border-left: 3px solid var(--highlight); border-radius: 6px; padding: 14px 18px; margin: 16px 0; }
+        .info-box { background: rgba(74,158,218,0.08); border-left: 3px solid var(--info); border-radius: 6px; padding: 14px 18px; margin: 16px 0; }
+        .success-box { background: rgba(76,175,125,0.08); border-left: 3px solid var(--success); border-radius: 6px; padding: 14px 18px; margin: 16px 0; }
+
+        ul, ol { padding-left: 22px; margin-bottom: 14px; color: #d0d8e8; }
+        li { margin-bottom: 7px; }
+
+        .badge { display: inline-block; padding: 2px 9px; border-radius: 10px; font-size: 0.76em; font-family: monospace; font-weight: bold; margin: 0 3px; }
+        .badge-green  { background: rgba(76,175,125,0.2); color: var(--success); border: 1px solid var(--success); }
+        .badge-red    { background: rgba(233,69,96,0.2); color: var(--highlight); border: 1px solid var(--highlight); }
+        .badge-blue   { background: rgba(74,158,218,0.2); color: var(--info); border: 1px solid var(--info); }
+        .badge-yellow { background: rgba(240,165,0,0.2); color: var(--warning); border: 1px solid var(--warning); }
+
+        /* Architecture diagram */
+        .arch-diagram {
+            background: var(--code-bg);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 30px;
+            margin: 20px 0;
+            overflow-x: auto;
+        }
+
+        .arch-row {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin: 8px 0;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        .arch-box {
+            border-radius: 8px;
+            padding: 10px 18px;
+            font-family: monospace;
+            font-size: 0.85em;
+            text-align: center;
+            min-width: 140px;
+        }
+
+        .arch-input   { background: rgba(15,52,96,0.8); border: 1px solid var(--info); color: #a8d8f0; }
+        .arch-roberta { background: rgba(74,158,218,0.15); border: 2px solid var(--info); color: #c8e8ff; min-width: 300px; padding: 16px 24px; }
+        .arch-output  { background: rgba(15,52,96,0.6); border: 1px solid var(--border); color: #a8c8f0; }
+        .arch-head-mlm    { background: rgba(240,165,0,0.1); border: 1px solid var(--warning); color: #f0c060; }
+        .arch-head-bin    { background: rgba(74,158,218,0.1); border: 1px solid var(--info); color: #a8d8f0; }
+        .arch-head-tri    { background: rgba(76,175,125,0.15); border: 2px solid var(--success); color: #80f0b0; }
+        .arch-head-reg    { background: rgba(15,52,96,0.6); border: 1px solid var(--border); color: #a8c8f0; }
+        .arch-final   { background: rgba(233,69,96,0.15); border: 2px solid var(--highlight); color: #f08090; font-weight: bold; }
+
+        .arch-arrow {
+            color: var(--muted);
+            font-size: 1.3em;
+            font-family: monospace;
+        }
+
+        .arch-label {
+            font-family: monospace;
+            font-size: 0.75em;
+            color: var(--muted);
+            text-align: center;
+            margin-top: 4px;
+        }
+
+        .arch-split {
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            margin: 8px 0;
+            flex-wrap: wrap;
+        }
+
+        .arch-col {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 6px;
+        }
+
+        /* Head comparison table */
+        .table-wrapper { overflow-x: auto; margin: 20px 0; border-radius: 10px; border: 1px solid var(--border); }
+        table { width: 100%; border-collapse: collapse; font-size: 0.9em; }
+        thead { background: var(--accent); }
+        th { padding: 12px 16px; text-align: left; color: #c8d8f0; font-family: monospace; font-size: 0.85em; }
+        td { padding: 11px 16px; border-top: 1px solid var(--border); color: #d0d8e8; }
+        tr:hover td { background: rgba(255,255,255,0.03); }
+
+        /* Code annotation */
+        .annotated {
+            background: var(--code-bg);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            overflow: hidden;
+            margin: 16px 0;
+        }
+        .annotated-header {
+            background: var(--accent);
+            padding: 8px 16px;
+            font-family: monospace;
+            font-size: 0.82em;
+            color: #c8d8f0;
+        }
+        .annotated-body {
+            padding: 18px 20px;
+            font-family: "Courier New", monospace;
+            font-size: 0.83em;
+            line-height: 1.8;
+            color: #a8c8f0;
+        }
+        .ann-comment { color: #5a8a6a; }
+        .ann-highlight { color: #f0c060; }
+        .ann-key { color: #f08090; }
+        .ann-note {
+            display: inline-block;
+            background: rgba(233,69,96,0.12);
+            border: 1px solid rgba(233,69,96,0.3);
+            border-radius: 4px;
+            padding: 1px 8px;
+            font-size: 0.82em;
+            color: #f08090;
+            margin-left: 10px;
+            font-family: Georgia, serif;
+        }
+
+        /* Softmax visual */
+        .softmax-row {
+            display: flex;
+            gap: 12px;
+            margin: 14px 0;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+        .softmax-cell {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 12px 18px;
+            text-align: center;
+            font-family: monospace;
+            min-width: 110px;
+        }
+        .softmax-cell .val { font-size: 1.4em; font-weight: bold; }
+        .softmax-cell .lbl { font-size: 0.75em; color: var(--muted); margin-top: 4px; }
+        .softmax-cell.active { border-color: var(--success); background: rgba(76,175,125,0.1); }
+        .softmax-cell.active .val { color: var(--success); }
+
+        footer { background: var(--secondary); border-top: 1px solid var(--border); padding: 30px 40px; text-align: center; color: var(--muted); font-size: 0.88em; }
+        footer strong { color: var(--text); }
+
+        @media (max-width: 600px) {
+            main { padding: 24px 16px; }
+            header { padding: 36px 20px; }
+            nav { padding: 0 12px; }
+        }
+    </style>
+</head>
+<body>
+
+<header>
+    <div class="tag">Architecture Deep Dive &middot; AlignScore</div>
+    <h1>BERTAlignModel: How It Works</h1>
+    <p>A detailed breakdown of the RoBERTa backbone, pooling strategy, four output heads, and how P(ALIGNED) becomes the AlignScore signal</p>
+</header>
+
+<nav>
+    <ul>
+        <li><a href="#overview">1. Overview</a></li>
+        <li><a href="#backbone">2. Backbone</a></li>
+        <li><a href="#heads">3. Output Heads</a></li>
+        <li><a href="#forward">4. Forward Pass</a></li>
+        <li><a href="#output">5. Model Output</a></li>
+        <li><a href="#signal">6. AlignScore Signal</a></li>
+    </ul>
+</nav>
+
+<main>
+
+    <!-- ═══════════ SECTION 1 ═══════════ -->
+    <section id="overview">
+        <div class="section-label">Section 01</div>
+        <h2>Architecture Overview</h2>
+
+        <p>BERTAlignModel is a PyTorch Lightning module built on a pretrained transformer encoder (RoBERTa or BERT) with <strong>four task heads</strong> on top. Only one head &mdash; the 3-way classification head &mdash; is used at inference time to produce the AlignScore.</p>
+
+        <!-- FULL ARCHITECTURE DIAGRAM -->
+        <div class="arch-diagram">
+
+            <div class="arch-row">
+                <div class="arch-box arch-input">[CLS] chunk_text [SEP] summary_sentence [SEP]</div>
+            </div>
+
+            <div class="arch-row"><div class="arch-arrow">&#8595;</div></div>
+
+            <div class="arch-row">
+                <div class="arch-box arch-roberta">
+                    <strong>RoBERTa / BERT Transformer</strong><br>
+                    <span style="font-size:0.82em; color:#88b8e0;">12–24 layers &nbsp;&middot;&nbsp; 768-dim hidden states</span>
+                </div>
+            </div>
+
+            <div class="arch-row"><div class="arch-arrow">&#8595;</div><div style="font-family:monospace; font-size:0.8em; color:var(--muted);">two outputs extracted</div></div>
+
+            <div class="arch-split">
+                <div class="arch-col">
+                    <div class="arch-box arch-output">last_hidden_state<br><span style="font-size:0.78em; color:var(--muted);">[N_tokens &times; 768]<br>all token vectors</span></div>
+                    <div class="arch-arrow">&#8595;</div>
+                    <div class="arch-box arch-head-mlm">mlm_head<br><span style="font-size:0.78em;">(lm_head / cls.predictions)</span><br><span style="font-size:0.78em; color:var(--muted);">&rarr; [N_tokens &times; vocab_size]</span></div>
+                    <div style="font-size:0.76em; color:var(--warning); font-family:monospace; text-align:center;">prediction_logits<br>(training only)</div>
+                </div>
+
+                <div class="arch-col">
+                    <div class="arch-box arch-output">pooler_output<br><span style="font-size:0.78em; color:var(--muted);">[768-dim]<br>CLS token only</span></div>
+                    <div class="arch-arrow">&#8595; dropout(0.1)</div>
+                    <div class="arch-split" style="gap:10px;">
+                        <div class="arch-col">
+                            <div class="arch-box arch-head-bin">bin_layer<br>Linear(768&rarr;2)<br><span style="font-size:0.78em; color:var(--muted);">ALIGNED /<br>NOT-ALIGNED</span></div>
+                            <div style="font-size:0.76em; color:var(--info); font-family:monospace; text-align:center;">seq_relationship<br>_logits</div>
+                        </div>
+                        <div class="arch-col">
+                            <div class="arch-box arch-head-tri">tri_layer<br>Linear(768&rarr;3)<br><span style="font-size:0.78em; color:#80f0b0;">ALIGNED /<br>CONTRADICT /<br>NEUTRAL</span></div>
+                            <div style="font-size:0.76em; color:var(--success); font-family:monospace; text-align:center;">tri_label_logits<br>&#11088; used for score</div>
+                        </div>
+                        <div class="arch-col">
+                            <div class="arch-box arch-head-reg">reg_layer<br>Linear(768&rarr;1)<br><span style="font-size:0.78em; color:var(--muted);">score &isin; [0,1]</span></div>
+                            <div style="font-size:0.76em; color:var(--muted); font-family:monospace; text-align:center;">reg_label_logits</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="arch-row" style="margin-top:16px;">
+                <div class="arch-box arch-final">softmax(tri_label_logits)[:, 0] = P(ALIGNED) &rarr; AlignScore</div>
+            </div>
+
+        </div>
+    </section>
+
+    <!-- ═══════════ SECTION 2 ═══════════ -->
+    <section id="backbone">
+        <div class="section-label">Section 02</div>
+        <h2>The Backbone: RoBERTa</h2>
+
+        <p>The model supports both RoBERTa and BERT backbones. For AlignScore, <strong>RoBERTa-base</strong> (125M) or <strong>RoBERTa-large</strong> (355M) is used. Two things are loaded from the pretrained checkpoint:</p>
+
+        <div class="annotated">
+            <div class="annotated-header">model/__init__.py — backbone loading</div>
+            <div class="annotated-body">
+                <span class="ann-key">self.base_model</span> = RobertaModel.from_pretrained(model)
+                <span class="ann-note">transformer blocks, outputs last_hidden_state + pooler_output</span><br>
+                <span class="ann-key">self.mlm_head</span> &nbsp;&nbsp;= RobertaForMaskedLM.from_pretrained(model).lm_head
+                <span class="ann-note">token-level prediction head, used only for synthetic data generation</span>
+            </div>
+        </div>
+
+        <h3>Two Key Outputs from base_model</h3>
+        <div class="table-wrapper">
+            <table>
+                <thead><tr><th>Output</th><th>Shape</th><th>What it is</th><th>Used by</th></tr></thead>
+                <tbody>
+                    <tr>
+                        <td><code>last_hidden_state</code></td>
+                        <td>[N_tokens &times; 768]</td>
+                        <td>Contextual embedding for <strong>every token</strong> in the input</td>
+                        <td>mlm_head only</td>
+                    </tr>
+                    <tr>
+                        <td><code>pooler_output</code></td>
+                        <td>[768]</td>
+                        <td>Linear + tanh applied to the <strong>[CLS] token</strong> embedding only — represents the whole pair</td>
+                        <td>bin, tri, reg heads</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="info-box">
+            <strong>Why pooler_output for scoring?</strong><br>
+            The [CLS] token is trained to aggregate the meaning of the entire input sequence. Using it as a fixed-size 768-dim vector to represent the (chunk, sentence) pair is the standard BERT-family classification strategy &mdash; no additional pooling needed.
+        </div>
+    </section>
+
+    <!-- ═══════════ SECTION 3 ═══════════ -->
+    <section id="heads">
+        <div class="section-label">Section 03</div>
+        <h2>The Four Output Heads</h2>
+
+        <div class="table-wrapper">
+            <table>
+                <thead><tr><th>Head</th><th>Layer</th><th>Input</th><th>Output Shape</th><th>Purpose</th><th>Used at Inference?</th></tr></thead>
+                <tbody>
+                    <tr>
+                        <td><span class="badge badge-yellow">mlm_head</span></td>
+                        <td>lm_head (RoBERTa)</td>
+                        <td>last_hidden_state</td>
+                        <td>[N_tokens &times; vocab]</td>
+                        <td>Predict masked tokens for synthetic data augmentation</td>
+                        <td style="color:var(--highlight);">No &mdash; training only</td>
+                    </tr>
+                    <tr>
+                        <td><span class="badge badge-blue">bin_layer</span></td>
+                        <td>Linear(768 &rarr; 2)</td>
+                        <td>pooler_output</td>
+                        <td>[2]</td>
+                        <td>Binary: ALIGNED / NOT-ALIGNED</td>
+                        <td style="color:var(--warning);">Optional</td>
+                    </tr>
+                    <tr style="background:rgba(76,175,125,0.05);">
+                        <td><span class="badge badge-green">tri_layer &#11088;</span></td>
+                        <td>Linear(768 &rarr; 3)</td>
+                        <td>pooler_output</td>
+                        <td>[3]</td>
+                        <td>3-way: ALIGNED / CONTRADICT / NEUTRAL</td>
+                        <td style="color:var(--success);">Yes &mdash; primary signal</td>
+                    </tr>
+                    <tr>
+                        <td><span class="badge badge-yellow">reg_layer</span></td>
+                        <td>Linear(768 &rarr; 1)</td>
+                        <td>pooler_output</td>
+                        <td>[1]</td>
+                        <td>Regression: continuous score in [0,1]</td>
+                        <td style="color:var(--warning);">Optional</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="highlight-box">
+            <strong>Why keep all 4 heads loaded?</strong><br>
+            The checkpoint was saved with all 4 heads. Even at inference only tri_layer is used, all heads must be present to load the checkpoint without errors &mdash; hence <code>strict=False</code> is passed to <code>load_from_checkpoint()</code>.
+        </div>
+    </section>
+
+    <!-- ═══════════ SECTION 4 ═══════════ -->
+    <section id="forward">
+        <div class="section-label">Section 04</div>
+        <h2>The Forward Pass</h2>
+
+        <p>On each call to <code>model(batch)</code>, the following happens in sequence:</p>
+
+        <div class="annotated">
+            <div class="annotated-header">forward(self, batch)</div>
+            <div class="annotated-body">
+<span class="ann-comment"># Step 1: Run RoBERTa transformer on tokenized pair</span><br>
+base_model_output = self.base_model(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;input_ids=batch[<span class="ann-highlight">'input_ids'</span>],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;attention_mask=batch[<span class="ann-highlight">'attention_mask'</span>],<br>
+&nbsp;&nbsp;&nbsp;&nbsp;token_type_ids=batch.get(<span class="ann-highlight">'token_type_ids'</span>, None)<br>
+)<br>
+<span class="ann-note">outputs last_hidden_state [N_tokens &times; 768] and pooler_output [768]</span><br><br>
+
+<span class="ann-comment"># Step 2: MLM head over ALL token embeddings (training only)</span><br>
+prediction_scores = self.mlm_head(base_model_output.<span class="ann-key">last_hidden_state</span>)<br>
+<span class="ann-note">&rarr; shape [N_tokens &times; vocab_size]</span><br><br>
+
+<span class="ann-comment"># Step 3: Three classification/regression heads over CLS vector</span><br>
+seq_relationship_score = self.bin_layer(self.dropout(base_model_output.<span class="ann-key">pooler_output</span>))<br>
+<span class="ann-note">&rarr; shape [2] &nbsp; ALIGNED / NOT-ALIGNED</span><br><br>
+
+tri_label_score = self.tri_layer(self.dropout(base_model_output.<span class="ann-key">pooler_output</span>))<br>
+<span class="ann-note" style="background:rgba(76,175,125,0.15); border-color:var(--success); color:#80f0b0;">&rarr; shape [3] &nbsp; ALIGNED / CONTRADICT / NEUTRAL &nbsp; &#11088; this is used</span><br><br>
+
+reg_label_score = self.reg_layer(base_model_output.<span class="ann-key">pooler_output</span>)<br>
+<span class="ann-note">&rarr; shape [1] &nbsp; continuous score</span>
+            </div>
+        </div>
+
+        <div class="info-box">
+            <strong>Note on dropout:</strong> <code>bin_layer</code> and <code>tri_layer</code> apply <code>dropout(0.1)</code> to the pooler_output before the linear layer. The <code>reg_layer</code> does not &mdash; it gets the raw pooler_output.
+        </div>
+    </section>
+
+    <!-- ═══════════ SECTION 5 ═══════════ -->
+    <section id="output">
+        <div class="section-label">Section 05</div>
+        <h2>ModelOutput Dataclass</h2>
+
+        <p>The forward pass returns a <code>ModelOutput</code> dataclass bundling all head outputs:</p>
+
+        <div class="table-wrapper">
+            <table>
+                <thead><tr><th>Field</th><th>Shape</th><th>Source</th><th>Used for</th></tr></thead>
+                <tbody>
+                    <tr><td><code>prediction_logits</code></td><td>[N_tokens &times; vocab]</td><td>mlm_head(last_hidden_state)</td><td>Synthetic data generation</td></tr>
+                    <tr><td><code>seq_relationship_logits</code></td><td>[batch &times; 2]</td><td>bin_layer(pooler_output)</td><td>Binary alignment training</td></tr>
+                    <tr style="background:rgba(76,175,125,0.05)"><td><code>tri_label_logits</code> &#11088;</td><td>[batch &times; 3]</td><td>tri_layer(pooler_output)</td><td><strong>AlignScore inference</strong></td></tr>
+                    <tr><td><code>reg_label_logits</code></td><td>[batch &times; 1]</td><td>reg_layer(pooler_output)</td><td>Regression training</td></tr>
+                    <tr><td><code>hidden_states</code></td><td>tuple of tensors</td><td>base_model internals</td><td>Optional analysis</td></tr>
+                    <tr><td><code>attentions</code></td><td>tuple of tensors</td><td>base_model internals</td><td>Optional analysis</td></tr>
+                </tbody>
+            </table>
+        </div>
+
+        <p>In <code>inference_core()</code>, only one field is accessed:</p>
+        <pre>model_output = model(mini_batch)
+model_output_tri = model_output.tri_label_logits   # shape [batch x 3]</pre>
+    </section>
+
+    <!-- ═══════════ SECTION 6 ═══════════ -->
+    <section id="signal">
+        <div class="section-label">Section 06</div>
+        <h2>From tri_label_logits to AlignScore</h2>
+
+        <p>The final step converts raw logits to a single score per (chunk, sentence) pair:</p>
+
+        <div class="annotated">
+            <div class="annotated-header">inference_core() — scoring</div>
+            <div class="annotated-body">
+model_output_tri = softmax(tri_label_logits)<br>
+<span class="ann-note">shape [batch &times; 3] &nbsp;&rarr;&nbsp; probabilities summing to 1.0 per row</span><br><br>
+
+output_score = model_output_tri[:, <span class="ann-key">0</span>]<br>
+<span class="ann-note" style="background:rgba(76,175,125,0.15); border-color:var(--success); color:#80f0b0;">column 0 = P(ALIGNED) &nbsp;&rarr;&nbsp; the AlignScore signal per pair</span>
+            </div>
+        </div>
+
+        <h3>Softmax Output Example</h3>
+        <p>For the pair: <em>"DeepInfer infers preconditions from DNNs."</em> vs <em>"DeepInfer is a trustworthy AI tool."</em></p>
+
+        <div class="softmax-row">
+            <div style="font-family:monospace; font-size:0.85em; color:var(--muted);">logits &rarr;</div>
+            <div class="softmax-cell"><div class="val" style="color:#a8c8f0;">[2.1,</div><div class="lbl">raw</div></div>
+            <div class="softmax-cell"><div class="val" style="color:#a8c8f0;">-0.3,</div><div class="lbl">raw</div></div>
+            <div class="softmax-cell"><div class="val" style="color:#a8c8f0;">0.5]</div><div class="lbl">raw</div></div>
+            <div style="font-family:monospace; font-size:1.2em; color:var(--muted);">&rarr; softmax &rarr;</div>
+            <div class="softmax-cell active"><div class="val">0.906</div><div class="lbl">P(ALIGNED) &nbsp;&#9650;</div></div>
+            <div class="softmax-cell"><div class="val" style="color:var(--highlight);">0.044</div><div class="lbl">P(CONTRADICT)</div></div>
+            <div class="softmax-cell"><div class="val" style="color:var(--muted);">0.050</div><div class="lbl">P(NEUTRAL)</div></div>
+        </div>
+
+        <div class="success-box" style="margin-top:20px;">
+            <strong>Full picture in one line:</strong><br><br>
+            <code>[CLS] chunk [SEP] sentence [SEP]</code><br>
+            &nbsp;&nbsp;&rarr; RoBERTa (12 layers)<br>
+            &nbsp;&nbsp;&rarr; pooler_output (CLS vector, 768-dim)<br>
+            &nbsp;&nbsp;&rarr; dropout &rarr; tri_layer Linear(768&rarr;3)<br>
+            &nbsp;&nbsp;&rarr; softmax &rarr; [P(ALIGNED), P(CONTRADICT), P(NEUTRAL)]<br>
+            &nbsp;&nbsp;&rarr; <strong>[:, 0] = P(ALIGNED) = single score per pair = AlignScore signal</strong>
+        </div>
+    </section>
+
+</main>
+
+<footer>
+    <p><strong>BERTAlignModel Architecture</strong> &mdash; AlignScore (Zha et al., ACL 2023)</p>
+    <p style="margin-top:6px; font-size:0.85em;">Part of Research Buddy v1.2 Whitepaper &nbsp;&middot;&nbsp; Nur A Jaman &nbsp;&middot;&nbsp; February 2026</p>
+</footer>
+
+</body>
+</html>

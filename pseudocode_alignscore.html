@@ -1,0 +1,702 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AlignScore Service — Pseudocode</title>
+<style>
+  :root {
+    --bg:      #0d1117;
+    --surface: #161b22;
+    --surface2: #1f2937;
+    --border:  #30363d;
+    --border2: #2a3a5c;
+    --text:    #c9d1d9;
+    --muted:   #6e7681;
+    --accent:  #58a6ff;
+    --accent2: #79c0ff;
+    --green:   #3fb950;
+    --yellow:  #d29922;
+    --orange:  #e3b341;
+    --purple:  #bc8cff;
+    --red:     #f85149;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html { color-scheme: dark; scroll-behavior: smooth; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    font-size: clamp(13px, 1vw + 10px, 15px);
+    line-height: 1.6;
+    min-height: 100vh;
+  }
+
+  /* ── TOP NAV ── */
+  .topbar {
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    background: rgba(13,17,23,0.92);
+    backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--border);
+    padding: 0 clamp(16px, 4vw, 48px);
+    height: 52px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+  }
+  .topbar-brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-weight: 600;
+    font-size: 2rem;
+    color: var(--accent);
+    text-decoration: none;
+  }
+  .topbar-brand svg { width: 20px; height: 20px; flex-shrink: 0; }
+  .topbar-meta {
+    font-size: 0.75rem;
+    color: var(--muted);
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+  }
+  .badge {
+    background: rgba(88,166,255,0.12);
+    border: 1px solid rgba(88,166,255,0.3);
+    color: var(--accent);
+    padding: 2px 8px;
+    border-radius: 20px;
+    font-size: 1rem;
+    font-weight: 600;
+    letter-spacing: 0.4px;
+  }
+
+  /* ── LAYOUT ── */
+  .page {
+    display: flex;
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: clamp(16px, 3vw, 40px) clamp(16px, 4vw, 48px);
+    gap: 2rem;
+  }
+
+  /* ── SIDEBAR TOC ── */
+  .sidebar {
+    width: 200px;
+    flex-shrink: 0;
+    position: sticky;
+    top: 68px;
+    align-self: flex-start;
+    max-height: calc(100vh - 80px);
+    overflow-y: auto;
+  }
+  .sidebar-title {
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--muted);
+    margin-bottom: 0.75rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid var(--border);
+  }
+  .toc-item {
+    display: block;
+    padding: 5px 10px;
+    border-radius: 6px;
+    font-size: 0.78rem;
+    color: var(--muted);
+    text-decoration: none;
+    border-left: 2px solid transparent;
+    margin-bottom: 2px;
+    transition: all 0.15s;
+    line-height: 1.4;
+  }
+  .toc-item:hover, .toc-item.active {
+    color: var(--accent);
+    background: rgba(88,166,255,0.07);
+    border-left-color: var(--accent);
+  }
+  .toc-item.helper { color: #3fb950; }
+  .toc-item.helper:hover { color: #3fb950; border-left-color: #3fb950; background: rgba(63,185,80,0.07); }
+  .toc-item.core { color: var(--accent2); }
+  .toc-item.core:hover { color: var(--accent2); border-left-color: var(--accent2); background: rgba(121,192,255,0.07); }
+  .toc-item.service { color: var(--purple); }
+  .toc-item.service:hover { color: var(--purple); border-left-color: var(--purple); background: rgba(188,140,255,0.07); }
+
+  /* ── MAIN CONTENT ── */
+  .main { flex: 1; min-width: 0; }
+
+  /* ── PAGE HEADER ── */
+  .page-header {
+    margin-bottom: 2rem;
+    padding-bottom: 1.5rem;
+    border-bottom: 1px solid var(--border);
+  }
+  .page-header h1 {
+    font-size: clamp(1.2rem, 2vw + 0.5rem, 1.6rem);
+    font-weight: 700;
+    color: var(--accent);
+    letter-spacing: -0.3px;
+    margin-bottom: 0.35rem;
+  }
+  .page-header p { color: var(--muted); font-size: 0.85rem; }
+  .header-tags { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: 0.75rem; }
+  .tag {
+    font-family: 'Courier New', monospace;
+    font-size: 0.72rem;
+    padding: 2px 8px;
+    border-radius: 20px;
+    border: 1px solid;
+  }
+  .tag-blue  { color: var(--accent);  border-color: rgba(88,166,255,0.3);  background: rgba(88,166,255,0.08); }
+  .tag-green { color: var(--green);   border-color: rgba(63,185,80,0.3);   background: rgba(63,185,80,0.08); }
+  .tag-purple{ color: var(--purple);  border-color: rgba(188,140,255,0.3); background: rgba(188,140,255,0.08); }
+
+  /* ── SECTION BLOCKS ── */
+  .pseudo-block {
+    margin-bottom: 1.5rem;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+    scroll-margin-top: 72px;
+  }
+
+  .block-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.7rem 1.2rem;
+    cursor: pointer;
+    user-select: none;
+    gap: 0.75rem;
+  }
+  .block-header:hover { filter: brightness(1.1); }
+
+  .block-header.type-constants { background: rgba(88,166,255,0.08); border-bottom: 1px solid rgba(88,166,255,0.15); }
+  .block-header.type-helper    { background: rgba(63,185,80,0.08);  border-bottom: 1px solid rgba(63,185,80,0.15); }
+  .block-header.type-core      { background: rgba(121,192,255,0.08);border-bottom: 1px solid rgba(121,192,255,0.15); }
+  .block-header.type-service   { background: rgba(188,140,255,0.08);border-bottom: 1px solid rgba(188,140,255,0.15); }
+
+  .block-kind {
+    font-size: 0.65rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    padding: 2px 7px;
+    border-radius: 4px;
+    flex-shrink: 0;
+  }
+  .kind-constants { background: rgba(88,166,255,0.2);  color: var(--accent); }
+  .kind-helper    { background: rgba(63,185,80,0.2);   color: var(--green); }
+  .kind-core      { background: rgba(121,192,255,0.2); color: var(--accent2); }
+  .kind-service   { background: rgba(188,140,255,0.2); color: var(--purple); }
+
+  .block-title {
+    font-family: 'Courier New', monospace;
+    font-size: 0.88rem;
+    font-weight: 600;
+    flex: 1;
+  }
+  .type-constants .block-title { color: var(--accent); }
+  .type-helper    .block-title { color: var(--green); }
+  .type-core      .block-title { color: var(--accent2); }
+  .type-service   .block-title { color: var(--purple); }
+
+  .block-chevron {
+    flex-shrink: 0;
+    width: 16px;
+    height: 16px;
+    color: var(--muted);
+    transition: transform 0.2s;
+  }
+  .pseudo-block.collapsed .block-chevron { transform: rotate(-90deg); }
+
+  .block-body {
+    background: var(--surface);
+    overflow: hidden;
+    transition: max-height 0.3s ease;
+  }
+  .pseudo-block.collapsed .block-body { display: none; }
+
+  /* ── PRE INSIDE BLOCK ── */
+  .block-body pre {
+    white-space: pre;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    background: transparent;
+    border: none;
+    border-radius: 0;
+    padding: clamp(14px, 2vw, 24px);
+    color: var(--text);
+    font-family: 'Courier New', Courier, monospace;
+    font-size: clamp(12px, 0.9vw + 9px, 13.5px);
+    line-height: 1.75;
+    tab-size: 4;
+    margin: 0;
+  }
+
+  /* Copy button */
+  .copy-btn {
+    background: rgba(255,255,255,0.05);
+    border: 1px solid var(--border);
+    color: var(--muted);
+    padding: 3px 10px;
+    border-radius: 5px;
+    font-size: 0.7rem;
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: all 0.15s;
+    font-family: inherit;
+  }
+  .copy-btn:hover { background: rgba(88,166,255,0.1); color: var(--accent); border-color: rgba(88,166,255,0.4); }
+  .copy-btn.copied { color: var(--green); border-color: rgba(63,185,80,0.4); background: rgba(63,185,80,0.1); }
+
+  /* ── FOOTER ── */
+  footer {
+    border-top: 1px solid var(--border);
+    padding: 1.25rem clamp(16px, 4vw, 48px);
+    color: var(--muted);
+    font-size: 0.78rem;
+    text-align: center;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 1.5rem;
+    flex-wrap: wrap;
+  }
+  footer a { color: var(--accent); text-decoration: none; }
+  footer a:hover { text-decoration: underline; }
+
+  /* ── RESPONSIVE ── */
+  @media (max-width: 768px) {
+    .sidebar { display: none; }
+    .page { padding: 12px 16px; }
+  }
+  @media (max-width: 480px) {
+    .topbar-meta .badge { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<!-- TOP NAV -->
+<nav class="topbar">
+  <a class="topbar-brand" href="#">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/>
+    </svg>
+    AlignScore Service
+  </a>
+  <div class="topbar-meta">
+    <span class="badge">Pseudocode</span>
+    <span>Research Buddy v1.2</span>
+    <span>Nur A Jaman</span>
+  </div>
+</nav>
+
+<div class="page">
+
+  <!-- SIDEBAR -->
+  <aside class="sidebar">
+    <div class="sidebar-title">On this page</div>
+    <a class="toc-item" href="#constants">Constants &amp; Startup</a>
+    <a class="toc-item helper" href="#chunk-text">chunk_text()</a>
+    <a class="toc-item core" href="#inference-core">inference_core()</a>
+    <a class="toc-item core" href="#inference-per-example">inference_per_example()</a>
+    <a class="toc-item service" href="#get-align-score">get_align_score()</a>
+    <a class="toc-item service" href="#get-breakdown">get_align_score_breakdown()</a>
+  </aside>
+
+  <!-- MAIN -->
+  <main class="main">
+
+    <div class="page-header">
+      <h1>AlignScore Service — Pseudocode</h1>
+      <p>Full pipeline traced with DeepInfer-flavored examples. Every data shape, every step.</p>
+      <div class="header-tags">
+        <span class="tag tag-blue">RoBERTa-base</span>
+        <span class="tag tag-blue">768-dim CLS</span>
+        <span class="tag tag-green">chunk_text</span>
+        <span class="tag tag-green">inference_core</span>
+        <span class="tag tag-purple">get_align_score</span>
+        <span class="tag tag-purple">breakdown</span>
+      </div>
+    </div>
+
+    <!-- BLOCK 1: Constants -->
+    <div class="pseudo-block" id="constants">
+      <div class="block-header type-constants" onclick="toggleBlock(this)">
+        <span class="block-kind kind-constants">Config</span>
+        <span class="block-title">CONSTANTS &amp; STARTUP</span>
+        <button class="copy-btn" onclick="copyBlock(event, this)">Copy</button>
+        <svg class="block-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+      </div>
+      <div class="block-body"><pre>ALIGNSCORE SERVICE
+==================
+
+CONSTANTS:
+    MODEL_PATH  ← path to AlignScore-base.ckpt
+    DEVICE      ← "cpu"
+    BATCH_SIZE  ← 32
+
+LOAD ONCE AT STARTUP:
+    model     ← BERTAlignModel (RoBERTa-base + 3 linear heads)
+    tokenizer ← RoBERTa tokenizer
+    softmax   ← Softmax over last dim
+    nlp       ← spaCy English model</pre></div>
+    </div>
+
+    <!-- BLOCK 2: chunk_text -->
+    <div class="pseudo-block" id="chunk-text">
+      <div class="block-header type-helper" onclick="toggleBlock(this)">
+        <span class="block-kind kind-helper">Helper</span>
+        <span class="block-title">chunk_text(sentences, n)</span>
+        <button class="copy-btn" onclick="copyBlock(event, this)">Copy</button>
+        <svg class="block-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+      </div>
+      <div class="block-body"><pre>══════════════════════════════════════════════════════
+HELPER: chunk_text(sentences, n)
+    → yield joined groups of n sentences at a time
+
+    EXAMPLE:
+        sentences = ["S1.", "S2.", "S3.", "S4.", "S5.", "S6."]
+        n = 2
+        → chunks = ["S1. S2.", "S3. S4.", "S5. S6."]</pre></div>
+    </div>
+
+    <!-- BLOCK 3: inference_core -->
+    <div class="pseudo-block" id="inference-core">
+      <div class="block-header type-core" onclick="toggleBlock(this)">
+        <span class="block-kind kind-core">Core</span>
+        <span class="block-title">inference_core(premise_list, hypo_list)</span>
+        <button class="copy-btn" onclick="copyBlock(event, this)">Copy</button>
+        <svg class="block-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+      </div>
+      <div class="block-body"><pre>══════════════════════════════════════════════════════════════
+CORE: inference_core(premise_list, hypo_list)
+──────────────────────────────────────────────────────────────
+
+INPUT:
+    premise_list = [chunk_0, chunk_0, chunk_0,
+                    chunk_1, chunk_1, chunk_1,
+                    chunk_2, chunk_2, chunk_2]   shape = [9]
+
+    hypo_list    = [sent_0,  sent_1,  sent_2,
+                    sent_0,  sent_1,  sent_2,
+                    sent_0,  sent_1,  sent_2]    shape = [9]
+
+──────────────────────────────────────────────────────────────
+STEP 1: Split into mini-batches of BATCH_SIZE (e.g. 32)
+
+    batch_0 = pairs [0..8]   ← all 9 fit in one batch here
+
+──────────────────────────────────────────────────────────────
+STEP 2: FOR each mini-batch → tokenize each pair
+
+    pair_0: (chunk_0, sent_0) → [CLS] chunk_0 [SEP] sent_0 [SEP]
+    pair_1: (chunk_0, sent_1) → [CLS] chunk_0 [SEP] sent_1 [SEP]
+    pair_2: (chunk_0, sent_2) → [CLS] chunk_0 [SEP] sent_2 [SEP]
+    pair_3: (chunk_1, sent_0) → [CLS] chunk_1 [SEP] sent_0 [SEP]
+    pair_4: (chunk_1, sent_1) → [CLS] chunk_1 [SEP] sent_1 [SEP]
+    pair_5: (chunk_1, sent_2) → [CLS] chunk_1 [SEP] sent_2 [SEP]
+    pair_6: (chunk_2, sent_0) → [CLS] chunk_2 [SEP] sent_0 [SEP]
+    pair_7: (chunk_2, sent_1) → [CLS] chunk_2 [SEP] sent_1 [SEP]
+    pair_8: (chunk_2, sent_2) → [CLS] chunk_2 [SEP] sent_2 [SEP]
+
+    EXAMPLE (pair_0):
+        premise = "DeepInfer infers preconditions from DNNs."
+        hypo    = "DeepInfer is a trustworthy AI tool."
+        tokens  = [CLS] DeepInfer infers ... [SEP] DeepInfer is ... [SEP]
+        padded/truncated to 512 tokens
+
+──────────────────────────────────────────────────────────────
+STEP 3: Feed all 9 pairs into RoBERTa
+
+    input shape  = [9 × 512 tokens]
+                         ↓
+                   RoBERTa (12 layers)
+                         ↓
+    pooler_output = CLS vector per pair
+    output shape = [9 × 768]
+
+──────────────────────────────────────────────────────────────
+STEP 4: dropout → tri_layer → logits
+
+    tri_layer(dropout(pooler_output))
+    output shape = [9 × 3]
+
+           ALIGNED  CONTRADICT  NEUTRAL
+    pair_0 [  2.10,    -0.30,    0.50 ]   chunk_0 × sent_0
+    pair_1 [  0.40,     0.80,    0.60 ]   chunk_0 × sent_1
+    pair_2 [  0.30,     0.90,    0.80 ]   chunk_0 × sent_2
+    pair_3 [  0.80,     0.50,    0.60 ]   chunk_1 × sent_0
+    pair_4 [  1.30,    -0.10,    0.30 ]   chunk_1 × sent_1
+    pair_5 [  0.60,     0.70,    0.50 ]   chunk_1 × sent_2
+    pair_6 [  0.70,     0.60,    0.50 ]   chunk_2 × sent_0
+    pair_7 [  1.00,     0.20,    0.30 ]   chunk_2 × sent_1
+    pair_8 [  1.60,    -0.20,    0.10 ]   chunk_2 × sent_2
+
+──────────────────────────────────────────────────────────────
+STEP 5: softmax → probabilities
+
+    output shape = [9 × 3]
+
+           ALIGNED  CONTRADICT  NEUTRAL
+    pair_0 [ 0.906,    0.044,    0.050 ]   chunk_0 × sent_0
+    pair_1 [ 0.310,    0.500,    0.190 ]   chunk_0 × sent_1
+    pair_2 [ 0.240,    0.560,    0.200 ]   chunk_0 × sent_2
+    pair_3 [ 0.420,    0.380,    0.200 ]   chunk_1 × sent_0
+    pair_4 [ 0.531,    0.269,    0.200 ]   chunk_1 × sent_1
+    pair_5 [ 0.350,    0.450,    0.200 ]   chunk_1 × sent_2
+    pair_6 [ 0.380,    0.420,    0.200 ]   chunk_2 × sent_0
+    pair_7 [ 0.480,    0.320,    0.200 ]   chunk_2 × sent_1
+    pair_8 [ 0.553,    0.247,    0.200 ]   chunk_2 × sent_2
+
+──────────────────────────────────────────────────────────────
+STEP 6: [:, 0] → grab ALIGNED column only
+
+    output_score = [0.906, 0.310, 0.240,
+                    0.420, 0.531, 0.350,
+                    0.380, 0.480, 0.553]   shape = [9]
+
+──────────────────────────────────────────────────────────────
+STEP 7: Concatenate all batch scores → return flat tensor
+
+    RETURN [0.906, 0.310, 0.240, 0.420, 0.531, 0.350, 0.380, 0.480, 0.553]</pre></div>
+    </div>
+
+    <!-- BLOCK 4: inference_per_example -->
+    <div class="pseudo-block" id="inference-per-example">
+      <div class="block-header type-core" onclick="toggleBlock(this)">
+        <span class="block-kind kind-core">Core</span>
+        <span class="block-title">inference_per_example(paper_text, summary_text)</span>
+        <button class="copy-btn" onclick="copyBlock(event, this)">Copy</button>
+        <svg class="block-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+      </div>
+      <div class="block-body"><pre>══════════════════════════════════════════════════════════════
+CORE: inference_per_example(paper_text, summary_text)
+──────────────────────────────────────────────────────────────
+
+STEP 1: sentence_tokenize(paper_text) → premise_sents
+
+    paper_text = "DeepInfer proposes a technique to infer preconditions.
+                  It uses weakest precondition calculus.
+                  Results show recall 0.98. Runtime is 0.22s."
+
+    premise_sents = [
+        "DeepInfer proposes a technique to infer preconditions.",
+        "It uses weakest precondition calculus.",
+        "Results show recall 0.98.",
+        "Runtime is 0.22s."
+    ]
+    len(premise_sents) = 4
+
+──────────────────────────────────────────────────────────────
+STEP 2: compute chunk size → group into ~350-word chunks
+
+    word_count  = 4200
+    n_chunk     = 4200 // 350 + 1 = 13   ← sentences per chunk
+    total sents = 39
+
+    chunk_0 = sents[0:13]   "DeepInfer proposes... [13 sents]"
+    chunk_1 = sents[13:26]  "We evaluate on 29 models... [13 sents]"
+    chunk_2 = sents[26:39]  "Results show recall 0.98... [13 sents]"
+
+    premise_chunks = [chunk_0, chunk_1, chunk_2]
+    len(premise_chunks) = 3
+
+──────────────────────────────────────────────────────────────
+STEP 3: sentence_tokenize(summary_text) → hypo_sents
+
+    summary_text = "DeepInfer infers preconditions. Violations
+                    correlate 0.88 with errors. Recall is 0.98."
+
+    hypo_sents = [
+        "DeepInfer infers preconditions.",
+        "Violations correlate 0.88 with errors.",
+        "Recall is 0.98."
+    ]
+    len(hypo_sents) = 3
+
+──────────────────────────────────────────────────────────────
+STEP 4: BUILD flat pair lists (all chunk × sentence combos)
+
+    premise_sent_mat = [chunk_0, chunk_0, chunk_0,   ← repeat each chunk
+                        chunk_1, chunk_1, chunk_1,      once per hypo sent
+                        chunk_2, chunk_2, chunk_2]
+
+    hypo_sents_mat   = [sent_0,  sent_1,  sent_2,    ← cycle through sents
+                        sent_0,  sent_1,  sent_2,       for every chunk
+                        sent_0,  sent_1,  sent_2]
+
+    total pairs = 3 chunks × 3 sents = 9
+
+──────────────────────────────────────────────────────────────
+STEP 5: output_score = inference_core(premise_sent_mat,
+                                      hypo_sents_mat)[:, 0]
+
+    inference_core returns [9 pairs × 3 labels]:
+
+           ALIGNED  CONTRADICT  NEUTRAL
+    pair_0 [ 0.906,   0.044,    0.050 ]   chunk_0 × sent_0
+    pair_1 [ 0.310,   0.500,    0.190 ]   chunk_0 × sent_1
+    pair_2 [ 0.240,   0.560,    0.200 ]   chunk_0 × sent_2
+    pair_3 [ 0.420,   0.380,    0.200 ]   chunk_1 × sent_0
+    pair_4 [ 0.531,   0.269,    0.200 ]   chunk_1 × sent_1
+    pair_5 [ 0.350,   0.450,    0.200 ]   chunk_1 × sent_2
+    pair_6 [ 0.380,   0.420,    0.200 ]   chunk_2 × sent_0
+    pair_7 [ 0.480,   0.320,    0.200 ]   chunk_2 × sent_1
+    pair_8 [ 0.553,   0.247,    0.200 ]   chunk_2 × sent_2
+
+    [:, 0] → flat ALIGNED scores:
+    output_score = [0.906, 0.310, 0.240,
+                    0.420, 0.531, 0.350,
+                    0.380, 0.480, 0.553]   shape = [9]
+
+──────────────────────────────────────────────────────────────
+STEP 6: .view(3, 3) → reshape into score_matrix
+
+    output_score.view(len(premise_chunks), len(hypo_sents))
+
+                  sent_0   sent_1   sent_2
+    chunk_0     [ 0.906,   0.310,   0.240 ]
+    chunk_1     [ 0.420,   0.531,   0.350 ]
+    chunk_2     [ 0.380,   0.480,   0.553 ]
+
+──────────────────────────────────────────────────────────────
+STEP 7: .max(dim=0) → best chunk per sentence (collapse rows)
+
+    sent_0: max(0.906, 0.420, 0.380) = 0.906  ← chunk_0 wins
+    sent_1: max(0.310, 0.531, 0.480) = 0.531  ← chunk_1 wins
+    sent_2: max(0.240, 0.350, 0.553) = 0.553  ← chunk_2 wins
+
+    best_scores = [0.906, 0.531, 0.553]
+
+──────────────────────────────────────────────────────────────
+STEP 8: .mean().item() → single final score
+
+    mean(0.906, 0.531, 0.553) = 0.663
+
+    RETURN 0.663</pre></div>
+    </div>
+
+    <!-- BLOCK 5: get_align_score -->
+    <div class="pseudo-block" id="get-align-score">
+      <div class="block-header type-service" onclick="toggleBlock(this)">
+        <span class="block-kind kind-service">Service</span>
+        <span class="block-title">get_align_score(paper_text, summary_text)</span>
+        <button class="copy-btn" onclick="copyBlock(event, this)">Copy</button>
+        <svg class="block-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+      </div>
+      <div class="block-body"><pre>══════════════════════════════════════════════════════════════
+SERVICE: get_align_score(paper_text, summary_text)
+──────────────────────────────────────────────────────────────
+
+    score       = inference_per_example(paper, summary)
+                = 0.663
+
+    confidence  = get_confidence(0.663)
+                = "Medium"     ← 0.6 ≤ 0.663 &lt; 0.8
+
+    is_reliable = 0.663 ≥ 0.7
+                = False
+
+    RETURN (0.663, "Medium", False)</pre></div>
+    </div>
+
+    <!-- BLOCK 6: get_align_score_breakdown -->
+    <div class="pseudo-block" id="get-breakdown">
+      <div class="block-header type-service" onclick="toggleBlock(this)">
+        <span class="block-kind kind-service">Service</span>
+        <span class="block-title">get_align_score_breakdown(paper, summary, top_k=3)</span>
+        <button class="copy-btn" onclick="copyBlock(event, this)">Copy</button>
+        <svg class="block-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+      </div>
+      <div class="block-body"><pre>══════════════════════════════════════════════════════════════
+SERVICE: get_align_score_breakdown(paper, summary, top_k=3)
+──────────────────────────────────────────────────────────────
+
+    [same STEPS 1–6 above → reuse score_matrix]
+
+                  sent_0   sent_1   sent_2
+    chunk_0     [ 0.906,   0.310,   0.240 ]
+    chunk_1     [ 0.420,   0.531,   0.350 ]
+    chunk_2     [ 0.380,   0.480,   0.553 ]
+
+    FOR sent_0 "DeepInfer infers preconditions.":
+        col = [0.906, 0.420, 0.380]
+        best_chunk = chunk_0  @ 0.906
+        top_3 = [(chunk_0, 0.906), (chunk_1, 0.420), (chunk_2, 0.380)]
+
+    FOR sent_1 "Violations correlate 0.88 with errors.":
+        col = [0.310, 0.531, 0.480]
+        best_chunk = chunk_1  @ 0.531
+        top_3 = [(chunk_1, 0.531), (chunk_2, 0.480), (chunk_0, 0.310)]
+
+    FOR sent_2 "Recall is 0.98.":
+        col = [0.240, 0.350, 0.553]
+        best_chunk = chunk_2  @ 0.553
+        top_3 = [(chunk_2, 0.553), (chunk_1, 0.350), (chunk_0, 0.240)]
+
+    RETURN {
+        align_score:         0.663,
+        confidence:          "Medium",
+        is_reliable:         False,
+        num_context_chunks:  3,
+        num_claim_sentences: 3,
+        per_sentence: [
+            { sent_0, best=chunk_0 @ 0.906, top_3=[...] },
+            { sent_1, best=chunk_1 @ 0.531, top_3=[...] },
+            { sent_2, best=chunk_2 @ 0.553, top_3=[...] }
+        ]
+    }</pre></div>
+    </div>
+
+  </main>
+</div>
+
+<footer>
+  <span>AlignScore &mdash; Zha et al., ACL 2023</span>
+  <span>&middot;</span>
+  <span>Research Buddy &middot; Nur A Jaman &middot; February 2026</span>
+</footer>
+
+<script>
+  function toggleBlock(header) {
+    const block = header.closest('.pseudo-block');
+    block.classList.toggle('collapsed');
+  }
+
+  function copyBlock(e, btn) {
+    e.stopPropagation();
+    const pre = btn.closest('.pseudo-block').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      btn.textContent = 'Copied!';
+      btn.classList.add('copied');
+      setTimeout(() => { btn.textContent = 'Copy'; btn.classList.remove('copied'); }, 1800);
+    });
+  }
+
+  // Highlight active TOC item on scroll
+  const sections = document.querySelectorAll('.pseudo-block');
+  const tocItems = document.querySelectorAll('.toc-item');
+  const observer = new IntersectionObserver(entries => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        tocItems.forEach(t => t.classList.remove('active'));
+        const active = document.querySelector(`.toc-item[href="#${entry.target.id}"]`);
+        if (active) active.classList.add('active');
+      }
+    });
+  }, { rootMargin: '-20% 0px -70% 0px' });
+  sections.forEach(s => observer.observe(s));
+</script>
+</body>
+</html>
